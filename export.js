@@ -3,7 +3,7 @@ const ExportTool = (function() {
 
     function init() {
         document.getElementById('btnConfirmExport').addEventListener('click', doExport);
-        document.getElementById('btnPrintLabels').addEventListener('click', printLabels);
+        document.getElementById('btnDoPrintLabels').addEventListener('click', printLabels);
     }
 
     function openExportModal() {

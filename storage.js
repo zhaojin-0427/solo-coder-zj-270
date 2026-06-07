@@ -290,6 +290,20 @@ const Storage = (function() {
         return data.items;
     }
 
+    function getItemsWithChildren(storageId) {
+        const data = getData();
+        const allIds = [storageId];
+        function collectChildren(parentId) {
+            const children = data.storages.filter(s => s.parentId === parentId);
+            children.forEach(c => {
+                allIds.push(c.id);
+                collectChildren(c.id);
+            });
+        }
+        collectChildren(storageId);
+        return data.items.filter(i => allIds.includes(i.locationId));
+    }
+
     function getItemById(id) {
         return getData().items.find(i => i.id === id);
     }
@@ -469,6 +483,7 @@ const Storage = (function() {
         getStoragePath,
         getStorageFullPath,
         getItems,
+        getItemsWithChildren,
         getItemById,
         addItem,
         updateItem,

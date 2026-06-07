@@ -182,7 +182,7 @@ const Items = (function() {
 
         let items;
         if (storageId) {
-            items = Storage.getItems(storageId);
+            items = Storage.getItemsWithChildren(storageId);
         } else {
             items = Storage.searchItems(keyword, seasons);
         }
