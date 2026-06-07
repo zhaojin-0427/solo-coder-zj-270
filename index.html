@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家居收纳空间规划与物品定位器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>🏠 家居收纳空间规划与物品定位器</h1>
+            <div class="header-actions">
+                <button id="btnExportList" class="btn btn-secondary">📋 导出收纳清单</button>
+                <button id="btnPrintLabels" class="btn btn-secondary">🏷️ 打印物品标签</button>
+                <button id="btnSeasonFilter" class="btn btn-accent">🌤️ 换季筛选</button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar left-sidebar">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>🗂️ 房间与收纳</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div class="room-tabs" id="roomTabs"></div>
+                        <button id="btnAddRoom" class="btn btn-primary btn-block">➕ 添加房间</button>
+                        <hr>
+                        <div class="tree-container" id="storageTree"></div>
+                        <button id="btnAddStorage" class="btn btn-primary btn-block">➕ 添加收纳空间</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>🔍 物品搜索</h3>
+                    </div>
+                    <div class="panel-body">
+                        <input type="text" id="searchInput" class="search-input" placeholder="搜索物品名称、标签...">
+                        <div class="filter-tags">
+                            <label><input type="checkbox" value="spring" class="season-filter"> 春</label>
+                            <label><input type="checkbox" value="summer" class="season-filter"> 夏</label>
+                            <label><input type="checkbox" value="autumn" class="season-filter"> 秋</label>
+                            <label><input type="checkbox" value="winter" class="season-filter"> 冬</label>
+                            <label><input type="checkbox" value="all-season" class="season-filter"> 四季</label>
+                        </div>
+                        <div id="searchResults" class="search-results"></div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <div class="panel floorplan-panel">
+                    <div class="panel-header">
+                        <h3>📐 房间平面图</h3>
+                        <div class="floorplan-tools">
+                            <button id="btnModeSelect" class="btn btn-sm btn-active" data-mode="select">👆 选择</button>
+                            <button id="btnModeCabinet" class="btn btn-sm" data-mode="cabinet">🗄️ 柜子</button>
+                            <button id="btnModeDrawer" class="btn btn-sm" data-mode="drawer">📦 抽屉</button>
+                            <button id="btnModeBox" class="btn btn-sm" data-mode="box">📋 收纳盒</button>
+                            <button id="btnModeDelete" class="btn btn-sm btn-danger" data-mode="delete">🗑️ 删除</button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="canvas-wrapper">
+                            <canvas id="floorplanCanvas" width="800" height="500"></canvas>
+                        </div>
+                        <div id="storageInfo" class="storage-info-panel hidden">
+                            <h4 id="infoStorageName"></h4>
+                            <p><strong>类型：</strong><span id="infoStorageType"></span></p>
+                            <p><strong>容量：</strong><span id="infoStorageCapacity"></span></p>
+                            <p><strong>物品数：</strong><span id="infoStorageItemCount"></span></p>
+                            <div class="info-actions">
+                                <button id="btnEditStorage" class="btn btn-sm btn-primary">编辑</button>
+                                <button id="btnViewItems" class="btn btn-sm btn-secondary">查看物品</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel items-panel">
+                    <div class="panel-header">
+                        <h3>📦 物品列表</h3>
+                        <button id="btnAddItem" class="btn btn-primary btn-sm">➕ 添加物品</button>
+                    </div>
+                    <div class="panel-body">
+                        <div id="itemsGrid" class="items-grid"></div>
+                        <div id="itemsEmpty" class="empty-state">
+                            <p>暂无物品，点击上方"添加物品"按钮开始录入</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <aside class="sidebar right-sidebar">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>📍 定位提示</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div id="locationHint" class="location-hint">
+                            <p class="hint-empty">从左侧选择或搜索物品查看定位信息</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>⚠️ 提醒事项</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div id="remindersList" class="reminders-list"></div>
+                        <div id="remindersEmpty" class="empty-state small">
+                            <p>暂无提醒</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>🌤️ 换季整理</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div class="season-info">
+                            <p><strong>当前季节：</strong><span id="currentSeason"></span></p>
+                            <div id="seasonItemsSummary" class="season-summary"></div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div id="roomModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="roomModalTitle">添加房间</h3>
+                <button class="modal-close" data-modal="roomModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>房间名称</label>
+                    <input type="text" id="roomName" class="form-input" placeholder="如：卧室、客厅">
+                </div>
+                <div class="form-group">
+                    <label>房间图标</label>
+                    <div class="icon-picker" id="roomIconPicker"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="roomModal">取消</button>
+                <button id="btnSaveRoom" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="storageModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="storageModalTitle">添加收纳空间</h3>
+                <button class="modal-close" data-modal="storageModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" id="storageName" class="form-input" placeholder="如：衣柜上层">
+                </div>
+                <div class="form-group">
+                    <label>类型</label>
+                    <select id="storageType" class="form-input">
+                        <option value="cabinet">🗄️ 柜子</option>
+                        <option value="drawer">📦 抽屉</option>
+                        <option value="box">📋 收纳盒</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>所属父级（可选）</label>
+                    <select id="storageParent" class="form-input">
+                        <option value="">-- 顶级收纳空间 --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>容量（可存放物品数）</label>
+                    <input type="number" id="storageCapacity" class="form-input" value="20" min="1">
+                </div>
+                <div class="form-group">
+                    <label>备注</label>
+                    <textarea id="storageNotes" class="form-input" rows="2" placeholder="可选备注信息"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="storageModal">取消</button>
+                <button id="btnSaveStorage" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="itemModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="itemModalTitle">添加物品</h3>
+                <button class="modal-close" data-modal="itemModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>物品名称 *</label>
+                        <input type="text" id="itemName" class="form-input" placeholder="如：羽绒服">
+                    </div>
+                    <div class="form-group">
+                        <label>分类</label>
+                        <select id="itemCategory" class="form-input">
+                            <option value="clothing">👕 衣物</option>
+                            <option value="document">📄 文件</option>
+                            <option value="kitchen">🍳 厨房用品</option>
+                            <option value="electronics">📱 电子设备</option>
+                            <option value="tool">🔧 工具</option>
+                            <option value="decoration">🎨 装饰品</option>
+                            <option value="medicine">💊 药品</option>
+                            <option value="other">📦 其他</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>存放位置 *</label>
+                        <select id="itemLocation" class="form-input"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>数量</label>
+                        <input type="number" id="itemQuantity" class="form-input" value="1" min="1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>季节性标签</label>
+                        <div class="season-tags">
+                            <label><input type="checkbox" value="spring"> 🌸 春</label>
+                            <label><input type="checkbox" value="summer"> ☀️ 夏</label>
+                            <label><input type="checkbox" value="autumn"> 🍂 秋</label>
+                            <label><input type="checkbox" value="winter"> ❄️ 冬</label>
+                            <label><input type="checkbox" value="all-season"> 🌀 四季</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>过期日期（可选）</label>
+                        <input type="date" id="itemExpiry" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>最后使用日期</label>
+                        <input type="date" id="itemLastUsed" class="form-input">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-2">
+                        <label>物品照片</label>
+                        <div class="photo-uploader">
+                            <div class="photo-preview" id="photoPreview">
+                                <span class="photo-placeholder">📷 点击上传照片</span>
+                            </div>
+                            <input type="file" id="itemPhoto" accept="image/*" style="display:none">
+                        </div>
+                    </div>
+                    <div class="form-group flex-2">
+                        <label>备注</label>
+                        <textarea id="itemNotes" class="form-input" rows="5" placeholder="物品描述、购买信息等"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="itemModal">取消</button>
+                <button id="btnSaveItem" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="seasonModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>🌤️ 换季整理助手</h3>
+                <button class="modal-close" data-modal="seasonModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="season-tabs">
+                    <button class="btn season-tab active" data-season="spring">🌸 春季</button>
+                    <button class="btn season-tab" data-season="summer">☀️ 夏季</button>
+                    <button class="btn season-tab" data-season="autumn">🍂 秋季</button>
+                    <button class="btn season-tab" data-season="winter">❄️ 冬季</button>
+                </div>
+                <div id="seasonContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="seasonModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="exportModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📋 导出收纳清单</h3>
+                <button class="modal-close" data-modal="exportModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>导出格式</label>
+                    <select id="exportFormat" class="form-input">
+                        <option value="json">JSON 格式（完整数据）</option>
+                        <option value="csv">CSV 格式（表格）</option>
+                        <option value="html">HTML 格式（可打印）</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>包含内容</label>
+                    <label><input type="checkbox" id="exportRooms" checked> 房间与收纳空间</label>
+                    <label><input type="checkbox" id="exportItems" checked> 物品清单</label>
+                    <label><input type="checkbox" id="exportPhotos"> 物品照片</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="exportModal">取消</button>
+                <button id="btnConfirmExport" class="btn btn-primary">导出</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="labelsModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>🏷️ 打印物品标签</h3>
+                <button class="modal-close" data-modal="labelsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>选择要打印标签的物品</label>
+                    <div id="labelsItemList" class="labels-item-list"></div>
+                </div>
+                <div class="labels-preview" id="labelsPreview"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="labelsModal">取消</button>
+                <button id="btnPrintLabels" class="btn btn-primary">🖨️ 打印</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="storage.js"></script>
+    <script src="floorplan.js"></script>
+    <script src="tree.js"></script>
+    <script src="items.js"></script>
+    <script src="export.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
