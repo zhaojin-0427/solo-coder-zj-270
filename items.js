@@ -33,6 +33,10 @@ const Items = (function() {
     }
 
     function openAddModal(defaultLocationId) {
+        if (PlanEngine.isActive()) {
+            showToast('方案模式下不能直接添加物品，请先退出方案模式', 'warning');
+            return;
+        }
         editingItemId = null;
         currentPhotoData = null;
         document.getElementById('itemModalTitle').textContent = '添加物品';
@@ -91,6 +95,10 @@ const Items = (function() {
     }
 
     function saveItem() {
+        if (PlanEngine.isActive()) {
+            showToast('方案模式下不能直接编辑物品', 'warning');
+            return;
+        }
         const name = document.getElementById('itemName').value.trim();
         if (!name) {
             showToast('请输入物品名称', 'error');
@@ -181,10 +189,37 @@ const Items = (function() {
         const empty = document.getElementById('itemsEmpty');
 
         let items;
-        if (storageId) {
-            items = Storage.getItemsWithChildren(storageId);
+        const isPlanMode = PlanEngine.isActive();
+
+        if (isPlanMode) {
+            if (storageId) {
+                items = PlanEngine.getPlannedItemsWithChildren(storageId);
+            } else if (keyword || (seasons && seasons.length > 0)) {
+                const baseItems = PlanEngine.getPlannedItems();
+                let results = baseItems;
+                if (keyword && keyword.trim()) {
+                    const kw = keyword.trim().toLowerCase();
+                    results = results.filter(i =>
+                        i.name.toLowerCase().includes(kw) ||
+                        (i.notes && i.notes.toLowerCase().includes(kw))
+                    );
+                }
+                if (seasons && seasons.length > 0) {
+                    results = results.filter(i =>
+                        i.seasons.some(s => seasons.includes(s)) ||
+                        i.seasons.includes('all-season')
+                    );
+                }
+                items = results;
+            } else {
+                items = PlanEngine.getPlannedItems();
+            }
         } else {
-            items = Storage.searchItems(keyword, seasons);
+            if (storageId) {
+                items = Storage.getItemsWithChildren(storageId);
+            } else {
+                items = Storage.searchItems(keyword, seasons);
+            }
         }
 
         if (items.length === 0) {
@@ -198,27 +233,61 @@ const Items = (function() {
 
         grid.querySelectorAll('.item-card').forEach(card => {
             const id = card.dataset.id;
+            const checkbox = card.querySelector('.plan-checkbox');
+
+            if (checkbox) {
+                checkbox.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    PlanEngine.toggleItemSelection(id);
+                });
+            }
+
             card.addEventListener('click', () => {
-                emit('itemSelected', Storage.getItemById(id));
+                if (isPlanMode) {
+                    PlanEngine.toggleItemSelection(id);
+                } else {
+                    emit('itemSelected', Storage.getItemById(id));
+                }
             });
             card.querySelector('.btn-edit')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                openEditModal(id);
+                if (isPlanMode) {
+                    showToast('方案模式下请使用批量迁移功能调整位置', 'info');
+                } else {
+                    openEditModal(id);
+                }
             });
             card.querySelector('.btn-delete')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                deleteItem(id);
+                if (isPlanMode) {
+                    showToast('方案模式下不能直接删除物品', 'warning');
+                } else {
+                    deleteItem(id);
+                }
             });
             card.querySelector('.btn-locate')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                emit('locateItem', Storage.getItemById(id));
+                if (isPlanMode) {
+                    const plannedItem = PlanEngine.getPlannedItemById(id);
+                    if (plannedItem) emit('locateItem', plannedItem);
+                } else {
+                    emit('locateItem', Storage.getItemById(id));
+                }
             });
         });
     }
 
     function renderItemCard(item) {
-        const location = Storage.getStorageById(item.locationId);
-        const locationPath = location ? Storage.getStorageFullPath(item.locationId) : '未知位置';
+        const isPlanMode = PlanEngine.isActive();
+        const isSelected = isPlanMode && PlanEngine.getSelectedItemIds().includes(item.id);
+        const isMoved = isPlanMode && PlanEngine.isItemMoved(item.id);
+
+        let displayLocationId = item.locationId;
+        if (isPlanMode && isMoved) {
+            displayLocationId = PlanEngine.getItemPlannedLocation(item.id);
+        }
+        const location = Storage.getStorageById(displayLocationId);
+        const locationPath = location ? Storage.getStorageFullPath(displayLocationId) : '未知位置';
 
         let photoHtml;
         if (item.photo) {
@@ -235,8 +304,39 @@ const Items = (function() {
             ? `<span class="item-tag" style="background:#ffebee;color:#c62828;">⚠️ ${formatDate(item.expiry)}到期</span>`
             : '';
 
+        const checkboxHtml = isPlanMode
+            ? `<input type="checkbox" class="plan-checkbox" ${isSelected ? 'checked' : ''}>`
+            : '';
+
+        let cardClass = 'item-card';
+        if (isPlanMode) {
+            if (isSelected) cardClass += ' plan-selected';
+            if (isMoved) cardClass += ' plan-moved';
+        }
+
+        let locationDiffHtml = '';
+        if (isPlanMode && isMoved) {
+            const origLocId = PlanEngine.getOriginalItemLocation(item.id);
+            const origLoc = origLocId ? Storage.getStorageById(origLocId) : null;
+            const origPath = origLoc ? Storage.getStorageFullPath(origLocId) : '未知';
+            const plannedLoc = Storage.getStorageById(PlanEngine.getItemPlannedLocation(item.id));
+            const plannedPath = plannedLoc ? Storage.getStorageFullPath(PlanEngine.getItemPlannedLocation(item.id)) : '未知';
+            locationDiffHtml = `
+                <div class="plan-location-diff">
+                    <span class="diff-from">📍 ${escapeHtml(origPath)}</span>
+                    <span class="diff-arrow">→</span>
+                    <span class="diff-to">📍 ${escapeHtml(plannedPath)}</span>
+                </div>
+            `;
+        }
+
+        const locationDisplay = isPlanMode && isMoved
+            ? `<span style="color:#2e7d32;font-weight:500;" title="${escapeHtml(locationPath)}">📍 ${location ? escapeHtml(location.name) : '-'}</span>`
+            : `<span title="${escapeHtml(locationPath)}">📍 ${location ? escapeHtml(location.name) : '-'}</span>`;
+
         return `
-            <div class="item-card" data-id="${item.id}">
+            <div class="${cardClass}" data-id="${item.id}">
+                ${checkboxHtml}
                 <div class="item-photo">${photoHtml}</div>
                 <div class="item-info">
                     <div class="item-name">${escapeHtml(item.name)}</div>
@@ -248,8 +348,9 @@ const Items = (function() {
                         ${tagsHtml}
                         ${expiryBadge}
                     </div>
+                    ${locationDiffHtml}
                     <div style="margin-top:8px;font-size:12px;color:#888;display:flex;justify-content:space-between;align-items:center;">
-                        <span title="${escapeHtml(locationPath)}">📍 ${location ? escapeHtml(location.name) : '-'}</span>
+                        ${locationDisplay}
                         <span>
                             <button class="btn btn-sm btn-locate" title="定位">📍</button>
                             <button class="btn btn-sm btn-edit" title="编辑">✏️</button>
@@ -268,15 +369,35 @@ const Items = (function() {
             return;
         }
 
-        const fullPath = Storage.getStorageFullPath(item.locationId);
-        const storage = Storage.getStorageById(item.locationId);
+        const isPlanMode = PlanEngine.isActive();
+        const isMoved = isPlanMode && PlanEngine.isItemMoved(item.id);
+
+        let displayLocationId = item.locationId;
+        if (isPlanMode && isMoved) {
+            displayLocationId = PlanEngine.getItemPlannedLocation(item.id);
+        }
+
+        const fullPath = Storage.getStorageFullPath(displayLocationId);
+        const storage = Storage.getStorageById(displayLocationId);
         const room = storage ? Storage.getRooms().find(r => {
             let s = storage;
             while (s && s.parentId) s = Storage.getStorageById(s.parentId);
             return s && s.roomId === r.id;
         }) : null;
 
-        let html = `<div class="location-path">📍 ${escapeHtml(fullPath)}</div>`;
+        let html = '';
+        if (isMoved) {
+            const origPath = Storage.getStorageFullPath(PlanEngine.getOriginalItemLocation(item.id));
+            html += `
+                <div style="background:#fff8e1;border-left:3px solid #ff9500;padding:8px 12px;border-radius:4px;margin-bottom:10px;">
+                    <div style="font-size:11px;color:#e65100;margin-bottom:4px;">📋 方案模式 - 位置变更</div>
+                    <div style="font-size:12px;text-decoration:line-through;color:#999;">📍 ${escapeHtml(origPath)}</div>
+                    <div style="font-size:13px;font-weight:500;color:#2e7d32;margin-top:2px;">📍 ${escapeHtml(fullPath)}</div>
+                </div>
+            `;
+        } else {
+            html += `<div class="location-path">📍 ${escapeHtml(fullPath)}</div>`;
+        }
         html += `
             <div class="location-detail">
                 <div class="location-detail-label">物品名称</div>

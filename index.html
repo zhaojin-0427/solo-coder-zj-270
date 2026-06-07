@@ -9,13 +9,70 @@
 <body>
     <div class="app-container">
         <header class="app-header">
-            <h1>🏠 家居收纳空间规划与物品定位器</h1>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <h1>🏠 家居收纳空间规划与物品定位器</h1>
+                <div id="planModeBadge" class="plan-mode-badge hidden">
+                    <span class="plan-badge-dot"></span>
+                    <span>📋 方案模式</span>
+                    <span id="planModePlanName" class="plan-badge-name"></span>
+                </div>
+            </div>
             <div class="header-actions">
+                <button id="btnPlanMode" class="btn btn-accent">📋 整理方案</button>
                 <button id="btnExportList" class="btn btn-secondary">📋 导出收纳清单</button>
                 <button id="btnPrintLabels" class="btn btn-secondary">🏷️ 打印物品标签</button>
-                <button id="btnSeasonFilter" class="btn btn-accent">🌤️ 换季筛选</button>
+                <button id="btnSeasonFilter" class="btn btn-secondary">🌤️ 换季筛选</button>
             </div>
         </header>
+
+        <div id="planToolbar" class="plan-toolbar hidden">
+            <div class="plan-toolbar-section">
+                <span class="plan-toolbar-label">批量筛选：</span>
+                <select id="planFilterSeason" class="plan-toolbar-select">
+                    <option value="">全部季节</option>
+                    <option value="spring">🌸 春季</option>
+                    <option value="summer">☀️ 夏季</option>
+                    <option value="autumn">� 秋季</option>
+                    <option value="winter">❄️ 冬季</option>
+                    <option value="all-season">🌀 四季</option>
+                </select>
+                <select id="planFilterCategory" class="plan-toolbar-select">
+                    <option value="">全部分类</option>
+                    <option value="clothing">👕 衣物</option>
+                    <option value="document">📄 文件</option>
+                    <option value="kitchen">🍳 厨房用品</option>
+                    <option value="electronics">📱 电子设备</option>
+                    <option value="tool">🔧 工具</option>
+                    <option value="decoration">🎨 装饰品</option>
+                    <option value="medicine">💊 药品</option>
+                    <option value="other">📦 其他</option>
+                </select>
+                <label class="plan-toolbar-checkbox">
+                    <input type="checkbox" id="planFilterIdle"> 仅闲置(>180天)
+                </label>
+                <button id="btnPlanSelectFiltered" class="btn btn-sm btn-primary">选中筛选结果</button>
+                <button id="btnPlanClearSelection" class="btn btn-sm btn-secondary">清空选择</button>
+            </div>
+            <div class="plan-toolbar-divider"></div>
+            <div class="plan-toolbar-section">
+                <span class="plan-toolbar-label">批量操作：</span>
+                <button id="btnPlanBatchMove" class="btn btn-sm btn-accent">📦 批量迁移</button>
+                <button id="btnPlanBatchSwap" class="btn btn-sm btn-accent">🔄 批量换位</button>
+                <button id="btnPlanAdjustCapacity" class="btn btn-sm btn-accent">📏 调整容量</button>
+                <button id="btnPlanResetChanges" class="btn btn-sm btn-danger">↩️ 重置改动</button>
+            </div>
+            <div class="plan-toolbar-divider"></div>
+            <div class="plan-toolbar-section">
+                <span id="planSelectionCount" class="plan-toolbar-count">已选 0 件</span>
+                <span id="planChangeCount" class="plan-toolbar-count plan-change-count">0 项改动</span>
+            </div>
+            <div class="plan-toolbar-section plan-toolbar-right">
+                <button id="btnPlanSummary" class="btn btn-sm btn-primary">📊 方案摘要</button>
+                <button id="btnPlanSave" class="btn btn-sm btn-primary">💾 保存方案</button>
+                <button id="btnPlanApply" class="btn btn-sm btn-accent">✅ 一键应用</button>
+                <button id="btnPlanDiscard" class="btn btn-sm btn-danger">❌ 放弃方案</button>
+            </div>
+        </div>
 
         <div class="main-content">
             <aside class="sidebar left-sidebar">
@@ -125,6 +182,18 @@
                         <div class="season-info">
                             <p><strong>当前季节：</strong><span id="currentSeason"></span></p>
                             <div id="seasonItemsSummary" class="season-summary"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="capacityPanel" class="panel hidden">
+                    <div class="panel-header">
+                        <h3>📊 容量变化实时监控</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div id="capacityList" class="capacity-list"></div>
+                        <div id="capacityEmpty" class="empty-state small">
+                            <p>暂无容量变化</p>
                         </div>
                     </div>
                 </div>
@@ -347,9 +416,141 @@
         </div>
     </div>
 
+    <div id="planModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>📋 整理方案管理</h3>
+                <button class="modal-close" data-modal="planModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="plan-modal-actions">
+                    <button id="btnPlanNew" class="btn btn-primary">➕ 新建整理方案</button>
+                    <span class="plan-modal-hint">进入方案模式可在不改动正式数据的前提下模拟整理操作</span>
+                </div>
+                <h4 style="margin-top:20px;margin-bottom:10px;">💾 已保存方案</h4>
+                <div id="savedPlansList" class="saved-plans-list"></div>
+                <div id="savedPlansEmpty" class="empty-state small" style="display:none;">
+                    <p>暂无已保存的方案</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="planModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="planSummaryModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>📊 方案摘要</h3>
+                <button class="modal-close" data-modal="planSummaryModal">&times;</button>
+            </div>
+            <div class="modal-body" id="planSummaryContent"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="planSummaryModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="planSaveModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💾 保存方案</h3>
+                <button class="modal-close" data-modal="planSaveModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>方案名称</label>
+                    <input type="text" id="planSaveName" class="form-input" placeholder="请输入方案名称">
+                </div>
+                <div class="form-group">
+                    <label>方案描述（可选）</label>
+                    <textarea id="planSaveDesc" class="form-input" rows="3" placeholder="简要描述这个整理方案..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="planSaveModal">取消</button>
+                <button id="btnPlanConfirmSave" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchMoveModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📦 批量迁移物品</h3>
+                <button class="modal-close" data-modal="batchMoveModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:12px;color:#666;">已选中 <strong id="batchMoveCount">0</strong> 件物品，选择目标收纳空间：</p>
+                <div class="form-group">
+                    <label>目标收纳空间</label>
+                    <select id="batchMoveTarget" class="form-input"></select>
+                </div>
+                <div id="batchMoveTargetInfo" class="batch-target-info"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="batchMoveModal">取消</button>
+                <button id="btnConfirmBatchMove" class="btn btn-primary">确认迁移</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchSwapModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔄 批量换位</h3>
+                <button class="modal-close" data-modal="batchSwapModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:12px;color:#666;">选择两组物品进行位置互换：</p>
+                <div class="form-group">
+                    <label>A 组（已选择 <span id="swapGroupACount">0</span> 件）</label>
+                    <div id="swapGroupAItems" class="swap-group-items"></div>
+                    <button id="btnSwapUseSelectedA" class="btn btn-sm btn-secondary" style="margin-top:6px;">使用当前选中作为 A 组</button>
+                </div>
+                <div class="form-group">
+                    <label>B 组</label>
+                    <select id="swapGroupB" class="form-input">
+                        <option value="">选择收纳空间作为 B 组位置</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="batchSwapModal">取消</button>
+                <button id="btnConfirmBatchSwap" class="btn btn-primary">确认换位</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="adjustCapacityModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📏 调整收纳空间容量</h3>
+                <button class="modal-close" data-modal="adjustCapacityModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>选择收纳空间</label>
+                    <select id="adjustCapacityStorage" class="form-input"></select>
+                </div>
+                <div id="adjustCapacityInfo" class="capacity-adjust-info"></div>
+                <div class="form-group">
+                    <label>新容量</label>
+                    <input type="number" id="adjustCapacityValue" class="form-input" min="1" value="20">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close-btn" data-modal="adjustCapacityModal">取消</button>
+                <button id="btnConfirmAdjustCapacity" class="btn btn-primary">确认调整</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="storage.js"></script>
+    <script src="plan.js"></script>
     <script src="floorplan.js"></script>
     <script src="tree.js"></script>
     <script src="items.js"></script>

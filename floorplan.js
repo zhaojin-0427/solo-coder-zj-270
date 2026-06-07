@@ -81,17 +81,25 @@ const FloorPlan = (function() {
         const pos = getMousePos(e);
         const storages = Storage.getStorages(currentRoomId).filter(s => !s.parentId);
 
+        if (PlanEngine.isActive() && currentMode !== 'select') {
+            showToast('方案模式下请使用工具栏进行批量操作', 'warning');
+            setMode('select');
+            return;
+        }
+
         if (currentMode === 'select') {
             const hit = hitTest(pos, storages);
             if (hit) {
-                const handle = getResizeHandle(pos, hit.storage);
-                if (handle) {
-                    isResizing = true;
-                    resizeHandle = handle;
-                } else {
-                    isDragging = true;
-                    dragOffset.x = pos.x - hit.storage.x;
-                    dragOffset.y = pos.y - hit.storage.y;
+                if (!PlanEngine.isActive()) {
+                    const handle = getResizeHandle(pos, hit.storage);
+                    if (handle) {
+                        isResizing = true;
+                        resizeHandle = handle;
+                    } else {
+                        isDragging = true;
+                        dragOffset.x = pos.x - hit.storage.x;
+                        dragOffset.y = pos.y - hit.storage.y;
+                    }
                 }
                 selectedStorageId = hit.storage.id;
                 updateInfoPanel();
@@ -246,22 +254,43 @@ const FloorPlan = (function() {
         }
 
         panel.classList.remove('hidden');
+        const plannedStorage = PlanEngine.isActive() ? PlanEngine.getPlannedStorage(selectedStorageId) : storage;
+
         document.getElementById('infoStorageName').textContent =
             Storage.getStorageTypeIcon(storage.type) + ' ' + storage.name;
         document.getElementById('infoStorageType').textContent = Storage.getStorageTypeName(storage.type);
-        document.getElementById('infoStorageCapacity').textContent = storage.capacity + ' 件';
 
-        const allIds = [storage.id];
-        function collectChildren(parentId) {
-            const children = Storage.getStorages(currentRoomId).filter(s => s.parentId === parentId);
-            children.forEach(c => {
-                allIds.push(c.id);
-                collectChildren(c.id);
-            });
+        if (PlanEngine.isActive()) {
+            const capInfo = PlanEngine.getStorageCapacityInfo(selectedStorageId);
+            if (capInfo) {
+                const capDelta = capInfo.delta.capacity;
+                const capText = capDelta !== 0
+                    ? `${capInfo.original.capacity} → ${capInfo.planned.capacity} (${capDelta > 0 ? '+' : ''}${capDelta})`
+                    : `${capInfo.planned.capacity}`;
+                document.getElementById('infoStorageCapacity').textContent = capText + ' 件';
+
+                const countDelta = capInfo.delta.count;
+                const countText = countDelta !== 0
+                    ? `${capInfo.original.count} → ${capInfo.planned.count} (${countDelta > 0 ? '+' : ''}${countDelta})`
+                    : `${capInfo.planned.count}`;
+                const overText = capInfo.planned.overCapacity ? ' ⚠️ 超容' : '';
+                document.getElementById('infoStorageItemCount').textContent = countText + ' 件' + overText;
+            }
+        } else {
+            document.getElementById('infoStorageCapacity').textContent = storage.capacity + ' 件';
+
+            const allIds = [storage.id];
+            function collectChildren(parentId) {
+                const children = Storage.getStorages(currentRoomId).filter(s => s.parentId === parentId);
+                children.forEach(c => {
+                    allIds.push(c.id);
+                    collectChildren(c.id);
+                });
+            }
+            collectChildren(storage.id);
+            const itemCount = Storage.getItems().filter(i => allIds.includes(i.locationId)).length;
+            document.getElementById('infoStorageItemCount').textContent = itemCount + ' 件';
         }
-        collectChildren(storage.id);
-        const itemCount = Storage.getItems().filter(i => allIds.includes(i.locationId)).length;
-        document.getElementById('infoStorageItemCount').textContent = itemCount + ' 件';
     }
 
     function render() {
@@ -310,19 +339,61 @@ const FloorPlan = (function() {
         const isSelected = storage.id === selectedStorageId;
         const isHighlighted = storage.id === highlightStorageId;
 
+        let fillColor = colors.fill;
+        let strokeColor = isSelected ? '#ff9500' : colors.stroke;
+        let lineWidth = isSelected ? 3 : 2;
+
+        let capacityInfo = null;
+        let isPlanAffected = false;
+        let isPlanOverCapacity = false;
+
+        if (PlanEngine.isActive()) {
+            capacityInfo = PlanEngine.getStorageCapacityInfo(storage.id);
+            if (capacityInfo) {
+                isPlanAffected = capacityInfo.delta.count !== 0 || capacityInfo.delta.capacity !== 0;
+                isPlanOverCapacity = capacityInfo.planned.overCapacity;
+            }
+        }
+
+        if (isPlanOverCapacity) {
+            fillColor = '#ffcdd2';
+            strokeColor = isSelected ? '#ff9500' : '#d9534f';
+        } else if (isPlanAffected) {
+            fillColor = '#ffe0b2';
+        }
+
         if (isHighlighted) {
             ctx.shadowColor = '#ff9500';
             ctx.shadowBlur = 15;
         }
 
-        ctx.fillStyle = colors.fill;
+        ctx.fillStyle = fillColor;
         ctx.fillRect(x, y, width, height);
 
         ctx.shadowBlur = 0;
 
-        ctx.strokeStyle = isSelected ? '#ff9500' : colors.stroke;
-        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = lineWidth;
         ctx.strokeRect(x, y, width, height);
+
+        if (isPlanAffected) {
+            ctx.save();
+            ctx.strokeStyle = '#ff9500';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(x + 3, y + 3, width - 6, height - 6);
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        if (isPlanOverCapacity) {
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillStyle = '#d9534f';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'top';
+            ctx.fillText('⚠️', x + width - 10, y + 6);
+            ctx.textAlign = 'left';
+        }
 
         ctx.fillStyle = colors.text;
         ctx.font = 'bold 13px sans-serif';
@@ -332,12 +403,32 @@ const FloorPlan = (function() {
         ctx.fillText(`${icon} ${storage.name}`, x + 8, y + 8);
 
         const childCount = Storage.getStorages(currentRoomId).filter(s => s.parentId === storage.id).length;
-        const itemCount = Storage.getItems(storage.id).length;
         ctx.font = '11px sans-serif';
         ctx.fillStyle = '#666';
-        let infoText = `容量: ${storage.capacity}`;
-        if (childCount > 0) infoText += ` | 子空间: ${childCount}`;
-        if (itemCount > 0) infoText += ` | 物品: ${itemCount}`;
+        let infoText;
+
+        if (PlanEngine.isActive() && capacityInfo) {
+            const origCap = capacityInfo.original.capacity;
+            const planCap = capacityInfo.planned.capacity;
+            const origCount = capacityInfo.original.count;
+            const planCount = capacityInfo.planned.count;
+            const deltaCount = capacityInfo.delta.count;
+
+            infoText = `容量: ${origCap !== planCap ? origCap + '→' + planCap : origCap}`;
+            infoText += ` | 物品: ${origCount !== planCount ? origCount + '→' + planCount : origCount}`;
+            if (deltaCount !== 0) {
+                infoText += ` (${deltaCount > 0 ? '+' : ''}${deltaCount})`;
+            }
+            if (capacityInfo.planned.overCapacity) {
+                infoText += ' ⚠️超容';
+            }
+        } else {
+            const itemCount = Storage.getItems(storage.id).length;
+            infoText = `容量: ${storage.capacity}`;
+            if (childCount > 0) infoText += ` | 子空间: ${childCount}`;
+            if (itemCount > 0) infoText += ` | 物品: ${itemCount}`;
+        }
+        if (childCount > 0 && !PlanEngine.isActive()) infoText += ` | 子空间: ${childCount}`;
         ctx.fillText(infoText, x + 8, y + 28);
 
         if (isSelected) {

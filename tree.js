@@ -43,19 +43,56 @@ const StorageTree = (function() {
         const isExpanded = expandedIds.has(storage.id) || depth < 1;
         if (depth < 1) expandedIds.add(storage.id);
 
-        const itemCount = countItems(storage.id, allStorages);
         const isSelected = storage.id === selectedStorageId;
         const icon = Storage.getStorageTypeIcon(storage.type);
 
+        let badgeClass = '';
+        let deltaHtml = '';
+        let nodeClass = isSelected ? 'active' : '';
+        let displayCount;
+
+        if (PlanEngine.isActive()) {
+            const capInfo = PlanEngine.getStorageCapacityInfo(storage.id);
+            if (capInfo) {
+                const origCount = capInfo.original.count;
+                const planCount = capInfo.planned.count;
+                const delta = capInfo.delta.count;
+
+                displayCount = origCount !== planCount ? `${origCount}→${planCount}` : planCount;
+
+                if (capInfo.planned.overCapacity) {
+                    badgeClass = 'plan-over';
+                    nodeClass += ' plan-over-capacity';
+                } else if (delta > 0) {
+                    badgeClass = 'plan-increased';
+                    nodeClass += ' plan-affected';
+                } else if (delta < 0) {
+                    badgeClass = 'plan-decreased';
+                    nodeClass += ' plan-affected';
+                } else if (capInfo.delta.capacity !== 0) {
+                    nodeClass += ' plan-affected';
+                }
+
+                if (delta !== 0) {
+                    deltaHtml = `<span class="tree-delta ${delta > 0 ? 'plus' : 'minus'}">${delta > 0 ? '+' : ''}${delta}</span>`;
+                }
+            } else {
+                displayCount = countItems(storage.id, allStorages);
+            }
+        } else {
+            displayCount = countItems(storage.id, allStorages);
+        }
+
         let html = `
             <div class="tree-node" data-id="${storage.id}">
-                <div class="tree-node-content ${isSelected ? 'active' : ''}">
+                <div class="tree-node-content ${nodeClass}">
                     <span class="tree-toggle" data-toggle="${storage.id}">
                         ${hasChildren ? (isExpanded ? '▼' : '▶') : ''}
                     </span>
                     <span class="tree-icon">${icon}</span>
                     <span class="tree-name">${escapeHtml(storage.name)}</span>
-                    <span class="tree-badge">${itemCount}</span>
+                    <span class="tree-badge ${badgeClass}">${displayCount}</span>
+                    ${deltaHtml}
                 </div>
         `;
 
